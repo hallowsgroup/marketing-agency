@@ -20,7 +20,7 @@ services:
     restart: unless-stopped
     environment:
       TS_AUTHKEY: ${TS_AUTHKEY:?Set the Tailscale auth key}
-      TS_HOSTNAME: ${TS_HOSTNAME:-hallows-marketing}
+      TS_HOSTNAME: ${TS_HOSTNAME:-hg-marketing}
       TS_STATE_DIR: /var/lib/tailscale
       TS_USERSPACE: "true"
       TS_AUTH_ONCE: "true"
@@ -30,7 +30,7 @@ services:
       TS_LOCAL_ADDR_PORT: 127.0.0.1:9002
     volumes:
       - hallows-tailscale-state:/var/lib/tailscale
-      - ./hallows/tailscale:/config:ro
+      - /config:/config:ro
     networks: [egress, database]
     healthcheck:
       test: [CMD, wget, -q, --spider, http://127.0.0.1:9002/healthz]
