@@ -32,10 +32,10 @@ No package version upgrades are required for this correction.
 ## Coolify setup
 
 1. Create a **new** Git repository resource for `hallowsgroup/marketing-agency`.
-   Use `feat/dinnerswipe-marketing` for the review deployment, or the merged commit
-   later. Build pack: Docker Compose. Compose path: `/docker-compose.hallows.yml`.
-   Use the repository root as the build context. The compose explicitly selects
-   upstream's `production` Dockerfile target, not its final `cloud` target.
+   Use `master` after merging the deployment fix. Build pack: Docker Compose.
+   Compose path: `/docker-compose.hallows.yml`. Keep the repository checkout:
+   it supplies the Tailscale Serve configuration. The app is a prebuilt image;
+   there is no server `build:` block and Coolify must not compile Paperclip.
 2. Leave all Coolify domains and port mappings empty. Disable proxy routing for
    this resource. Do not attach the stack to a public proxy network. Do not use
    the upstream quickstart Compose, which publishes an app port.
@@ -56,11 +56,50 @@ No package version upgrades are required for this correction.
    agents use `codex_local` and `gpt-5.6-sol`; other model IDs remain configurable.
 7. Pin `TAILSCALE_IMAGE` to the tested tag or digest for production. The example
    defaults to `stable`. PostgreSQL uses the 17-alpine major line. Record the
-   resolved image digests at rollout. Change `CLI_TOOLS_CACHE_EPOCH` deliberately
-   when refreshing the upstream image's CLI tools; its Codex install uses latest.
-8. Deploy. Retain all three new named volumes. The old OpenSoul resource and its
-   volumes must remain separate. A source build includes Rust and the full UI;
-   allow enough build memory and disk for the upstream image.
+   resolved image digests at rollout. The server image is pinned by digest in
+   Compose. Leave `PAPERCLIP_IMAGE` unset to use that tested default.
+8. Configure read access to `ghcr.io/hallowsgroup/marketing-agency` before deploy.
+   The registry rejected an anonymous pull during verification. GitHub repository
+   access does not automatically grant Docker registry access. Use a GitHub token
+   with `read:packages` and access to this package in the deployment server's
+   Docker registry credentials. Do not put that token in Compose or app variables.
+   Connect as the SSH user configured for that server in Coolify, run
+   `docker login ghcr.io -u YOUR_GITHUB_USERNAME`, and enter the token at the
+   password prompt. See [Coolify registry authentication](https://coolify.io/docs/core/infrastructure/servers/build-servers#sign-in-to-the-container-registry).
+9. Deploy. Retain all three named volumes and the same Coolify resource/project
+   identifier when retrying this failed deployment. The old OpenSoul volumes must
+   remain separate. All application secrets are runtime variables; disable their
+   build-time use. Remove the now-unused `CLI_TOOLS_CACHE_EPOCH` build variable.
+
+### September 13 build failure and image provenance
+
+The source build of commit `0008b6020a243e3c8843ba7ff99414cda74a4089`
+was killed with exit 137 during `pnpm --filter @paperclipai/server build` on
+Coolify. Exit 137 means SIGKILL; the supplied log does not prove an OOM kill.
+Check kernel OOM records and host/build memory limits for the exact cause.
+This occurs before the application starts, so changing PostgreSQL or Tailscale
+networking cannot repair that compilation failure.
+
+The same commit built successfully for **linux/amd64 and linux/arm64** in the
+[Hallows Docker workflow](https://github.com/hallowsgroup/marketing-agency/actions/runs/34740014648).
+The merge job published and pulled the multi-platform image, then passed the
+upstream PID-1 orphan-reaping smoke check. Compose now pins that manifest:
+
+```text
+ghcr.io/hallowsgroup/marketing-agency@sha256:7a549c11baa31e57d1c05d8faf6df14fedde3ccd4a2c39ac4d3a9fb2378330ca
+```
+
+Its readable source tag is `sha-0008b60`. The workflow builds upstream's
+`production` stage. The image includes DinnerSwipe's bootstrap and instructions
+at `/app/hallows/dinnerswipe`. Registry authentication remains required unless
+the package owner deliberately makes the package public. The digest was verified
+from the successful publishing and pull logs; a local anonymous pull returned 401.
+
+After this fix, a Coolify redeploy should pull the image and start the services.
+If it still reports `RUN pnpm ... build`, it is using stale source or a build
+override. Confirm the selected commit and remove any manual server `build:` block.
+The image smoke check does not replace first-login, database, provider, and
+tailnet acceptance checks below.
 
 ### Network behavior
 
@@ -185,6 +224,14 @@ Fetch `upstream/master`, merge it on an update branch, run Hallows checks and th
 upstream build/tests, and review a PR before deployment. Never force-reset the
 Hallows deployment branch. Drop the lockfile repair once upstream carries the
 same correction. Keep further customizations in `hallows/` where possible.
+
+The upstream Docker workflow already publishes this fork's images on pushes to
+`master`. After each source update, wait for both native architecture builds and
+the merge/smoke job to succeed. Then update the Compose image digest in a small
+deployment PR, or set `PAPERCLIP_IMAGE` to that verified digest in Coolify. A Git
+update alone intentionally does not advance the pinned application image. Do not
+change it to a floating `latest` tag or restore a local build to work around a
+missing image. The source build and its CLI refresh now happen in GitHub Actions.
 
 ```sh
 node --import ./cli/node_modules/tsx/dist/loader.mjs --test hallows/dinnerswipe/*.test.mjs

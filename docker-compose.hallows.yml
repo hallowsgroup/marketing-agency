@@ -39,13 +39,10 @@ services:
       retries: 30
 
   server:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: production
-      args:
-        PAPERCLIP_BUILD_COMMIT: ${SOURCE_COMMIT:-}
-        CLI_TOOLS_CACHE_EPOCH: ${CLI_TOOLS_CACHE_EPOCH:-2026-09-12}
+    # Built and smoke-tested by the Hallows Docker workflow at commit 0008b6020.
+    # Pin the multi-platform manifest; Coolify only pulls, never compiles.
+    image: ${PAPERCLIP_IMAGE:-ghcr.io/hallowsgroup/marketing-agency@sha256:7a549c11baa31e57d1c05d8faf6df14fedde3ccd4a2c39ac4d3a9fb2378330ca}
+    pull_policy: always
     restart: unless-stopped
     pids_limit: 2048
     network_mode: service:tailscale

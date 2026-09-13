@@ -11,6 +11,7 @@ test('rendered Compose isolates the database and only serves the app through tai
   }));
   for (const service of Object.values(config.services)) {
     assert.ok(!service.ports?.length, 'No host-published ports');
+    assert.equal(service.build, undefined, 'Coolify must not compile any service');
     assert.notEqual(service.network_mode, 'host');
   }
   assert.equal(config.networks.database.internal, true);
@@ -19,7 +20,8 @@ test('rendered Compose isolates the database and only serves the app through tai
   assert.equal(config.services.server.environment.HOST, '127.0.0.1');
   assert.equal(config.services.server.environment.PAPERCLIP_DEPLOYMENT_MODE, 'authenticated');
   assert.equal(config.services.server.environment.PAPERCLIP_DEPLOYMENT_EXPOSURE, 'private');
-  assert.equal(config.services.server.build.target, 'production');
+  assert.match(config.services.server.image, /^ghcr\.io\/hallowsgroup\/marketing-agency@sha256:[a-f0-9]{64}$/);
+  assert.equal(config.services.server.pull_policy, 'always');
   const serve = JSON.parse(readFileSync(new URL('./tailscale/serve.json', import.meta.url)));
   assert.deepEqual(serve.TCP, { 443: { HTTPS: true } });
   assert.equal(serve.AllowFunnel, undefined);
